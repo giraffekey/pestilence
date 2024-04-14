@@ -171,6 +171,16 @@ pub struct ChangeLevel {
 }
 
 #[derive(Debug, Clone, Resource)]
+pub struct Sprites {
+    attack_directions: (Handle<Image>, Handle<TextureAtlasLayout>),
+    obstacles: (Handle<Image>, Handle<TextureAtlasLayout>),
+    selections: (Handle<Image>, Handle<TextureAtlasLayout>),
+    tiles: (Handle<Image>, Handle<TextureAtlasLayout>),
+    ui_background: (Handle<Image>, Handle<TextureAtlasLayout>),
+    units: (Handle<Image>, Handle<TextureAtlasLayout>),
+}
+
+#[derive(Debug, Clone, Resource)]
 pub struct CurrentLevel(Level);
 
 #[derive(Debug, Clone, Resource)]
@@ -400,16 +410,14 @@ fn setup(
 
     commands.spawn(Camera2dBundle::default());
 
-    let selections_texture = asset_server.load("sprites/selections.png");
-    let selections_layout = TextureAtlasLayout::from_grid(Vec2::new(32.0, 32.0), 3, 1, None, None);
-    let selections_texture_atlas_layout = texture_atlas_layouts.add(selections_layout);
+    let sprites = setup_sprites(&mut commands, &asset_server, &mut texture_atlas_layouts);
 
     commands.spawn((
         Selection,
         SpriteSheetBundle {
-            texture: selections_texture.clone(),
+            texture: sprites.selections.0.clone(),
             atlas: TextureAtlas {
-                layout: selections_texture_atlas_layout,
+                layout: sprites.selections.1.clone(),
                 index: 0,
             },
             transform: Transform::from_xyz(-GAME_WIDTH, 0.0, 0.0).with_scale(Vec3::splat(2.0)),
@@ -417,15 +425,10 @@ fn setup(
         },
     ));
 
-    let (level, order) = setup_level(&mut commands, &asset_server, &mut texture_atlas_layouts, 0);
+    let (level, order) = setup_level(&mut commands, &sprites, 0);
     commands.insert_resource(CurrentLevel(level.clone()));
     commands.insert_resource(TurnOrder(order));
     commands.insert_resource(Dna(level.initial_dna));
-
-    let ui_background_texture = asset_server.load("sprites/ui_background.png");
-    let ui_background_layout =
-        TextureAtlasLayout::from_grid(Vec2::new(64.0, 208.0), 1, 1, None, None);
-    let ui_background_texture_atlas_layout = texture_atlas_layouts.add(ui_background_layout);
 
     commands.spawn(AtlasImageBundle {
         style: Style {
@@ -436,8 +439,8 @@ fn setup(
             top: Val::Px(32.0),
             ..default()
         },
-        texture_atlas: ui_background_texture_atlas_layout.into(),
-        image: UiImage::new(ui_background_texture),
+        texture_atlas: sprites.ui_background.1.into(),
+        image: UiImage::new(sprites.ui_background.0),
         ..default()
     });
 
@@ -649,10 +652,171 @@ fn setup(
         });
 }
 
+fn setup_sprites(
+    commands: &mut Commands,
+    asset_server: &Res<AssetServer>,
+    texture_atlas_layouts: &mut ResMut<Assets<TextureAtlasLayout>>,
+) -> Sprites {
+    let attack_directions_texture = asset_server.load("sprites/attack_directions.png");
+    let attack_directions_layout =
+        TextureAtlasLayout::from_grid(Vec2::new(32.0, 32.0), 4, 1, None, None);
+    let attack_directions_texture_atlas_layout =
+        texture_atlas_layouts.add(attack_directions_layout);
+
+    let obstacles_texture = asset_server.load("sprites/obstacles.png");
+    let obstacles_layout = TextureAtlasLayout::from_grid(Vec2::new(32.0, 32.0), 2, 1, None, None);
+    let obstacles_texture_atlas_layout = texture_atlas_layouts.add(obstacles_layout);
+
+    let selections_texture = asset_server.load("sprites/selections.png");
+    let selections_layout = TextureAtlasLayout::from_grid(Vec2::new(32.0, 32.0), 3, 1, None, None);
+    let selections_texture_atlas_layout = texture_atlas_layouts.add(selections_layout);
+
+    let tiles_texture = asset_server.load("sprites/tiles.png");
+    let tiles_layout = TextureAtlasLayout::from_grid(Vec2::new(32.0, 32.0), 3, 1, None, None);
+    let tiles_texture_atlas_layout = texture_atlas_layouts.add(tiles_layout);
+
+    let ui_background_texture = asset_server.load("sprites/ui_background.png");
+    let ui_background_layout =
+        TextureAtlasLayout::from_grid(Vec2::new(64.0, 208.0), 1, 1, None, None);
+    let ui_background_texture_atlas_layout = texture_atlas_layouts.add(ui_background_layout);
+
+    let units_texture = asset_server.load("sprites/units.png");
+    let units_layout = TextureAtlasLayout::from_grid(Vec2::new(32.0, 32.0), 8, 2, None, None);
+    let units_texture_atlas_layout = texture_atlas_layouts.add(units_layout);
+
+    let sprites = Sprites {
+        attack_directions: (
+            attack_directions_texture,
+            attack_directions_texture_atlas_layout,
+        ),
+        obstacles: (obstacles_texture, obstacles_texture_atlas_layout),
+        selections: (selections_texture, selections_texture_atlas_layout),
+        tiles: (tiles_texture, tiles_texture_atlas_layout),
+        ui_background: (ui_background_texture, ui_background_texture_atlas_layout),
+        units: (units_texture, units_texture_atlas_layout),
+    };
+
+    commands.insert_resource(sprites.clone());
+    sprites
+}
+
+fn setup_level(commands: &mut Commands, sprites: &Sprites, level_id: usize) -> (Level, Vec<usize>) {
+    let level = &levels()[level_id];
+
+    let width = level.tilemap[0].len();
+    let height = level.tilemap.len();
+    let offset_x = width as f32 / 2.0 * 64.0 - 32.0;
+    let offset_y = height as f32 / 2.0 * 64.0 - 32.0;
+
+    for (j, row) in level.tilemap.iter().enumerate() {
+        for (i, sprite_index) in row.iter().enumerate() {
+            commands.spawn((
+                Tile,
+                SpriteSheetBundle {
+                    texture: sprites.tiles.0.clone(),
+                    atlas: TextureAtlas {
+                        layout: sprites.tiles.1.clone(),
+                        index: *sprite_index,
+                    },
+                    transform: Transform::from_xyz(
+                        i as f32 * 64.0 - offset_x,
+                        j as f32 * 64.0 - offset_y,
+                        -2.0,
+                    )
+                    .with_scale(Vec3::splat(2.0)),
+                    ..default()
+                },
+            ));
+        }
+    }
+
+    for i in -BORDER..width as i16 + BORDER {
+        for j in -BORDER..height as i16 + BORDER {
+            if !(i >= 0 && i < width as i16 && j >= 0 && j < height as i16) {
+                commands.spawn((
+                    Tile,
+                    SpriteSheetBundle {
+                        texture: sprites.tiles.0.clone(),
+                        atlas: TextureAtlas {
+                            layout: sprites.tiles.1.clone(),
+                            index: 0,
+                        },
+                        transform: Transform::from_xyz(
+                            i as f32 * 64.0 - offset_x,
+                            j as f32 * 64.0 - offset_y,
+                            -2.0,
+                        )
+                        .with_scale(Vec3::splat(2.0)),
+                        ..default()
+                    },
+                ));
+            }
+        }
+    }
+
+    for (id, (unit_type, position)) in level.units.iter().enumerate() {
+        let Position(col, row) = position;
+        commands.spawn((
+            Unit {
+                id,
+                ..UNITS[unit_type.index()].clone()
+            },
+            position.clone(),
+            SpriteSheetBundle {
+                texture: sprites.units.0.clone(),
+                atlas: TextureAtlas {
+                    layout: sprites.units.1.clone(),
+                    index: unit_type.index(),
+                },
+                transform: Transform::from_xyz(
+                    *col as f32 * 64.0 - offset_x,
+                    *row as f32 * 64.0 - offset_y,
+                    -1.0,
+                )
+                .with_scale(Vec3::splat(2.0)),
+                ..default()
+            },
+        ));
+    }
+
+    for (obstacle, position) in &level.obstacles {
+        let Position(col, row) = position;
+        commands.spawn((
+            obstacle.clone(),
+            position.clone(),
+            SpriteSheetBundle {
+                texture: sprites.obstacles.0.clone(),
+                atlas: TextureAtlas {
+                    layout: sprites.obstacles.1.clone(),
+                    index: obstacle.index(),
+                },
+                transform: Transform::from_xyz(
+                    *col as f32 * 64.0 - offset_x,
+                    *row as f32 * 64.0 - offset_y,
+                    -1.0,
+                )
+                .with_scale(Vec3::splat(2.0)),
+                ..default()
+            },
+        ));
+    }
+
+    let mut turn_order: Vec<_> = level.units.iter().enumerate().collect();
+    turn_order.sort_by(|(_, (unit_a, position_a)), (_, (unit_b, position_b))| {
+        unit_a
+            .order()
+            .cmp(&unit_b.order())
+            .then(position_a.0.cmp(&position_b.0))
+            .then(position_a.1.cmp(&position_b.1))
+    });
+    let turn_order: Vec<_> = turn_order.iter().map(|(id, _)| *id).collect();
+
+    (level.clone(), turn_order)
+}
+
 fn listen_change_level(
     mut commands: Commands,
-    asset_server: Res<AssetServer>,
-    mut texture_atlas_layouts: ResMut<Assets<TextureAtlasLayout>>,
+    sprites: Res<Sprites>,
     mut current_level: ResMut<CurrentLevel>,
     mut turn_order: ResMut<TurnOrder>,
     mut dna: ResMut<Dna>,
@@ -701,155 +865,18 @@ fn listen_change_level(
                 .remove::<(AttackDirection, Position, SpriteSheetBundle)>();
         }
 
-        let (level, order) = setup_level(
-            &mut commands,
-            &asset_server,
-            &mut texture_atlas_layouts,
-            event.level_id,
-        );
+        let (level, order) = setup_level(&mut commands, &*sprites, event.level_id);
         current_level.0 = level.clone();
         turn_order.0 = order;
         dna.0 = level.initial_dna;
     }
 }
 
-fn setup_level(
-    commands: &mut Commands,
-    asset_server: &Res<AssetServer>,
-    texture_atlas_layouts: &mut ResMut<Assets<TextureAtlasLayout>>,
-    level_id: usize,
-) -> (Level, Vec<usize>) {
-    let level = &levels()[level_id];
-
-    let tiles_texture = asset_server.load("sprites/tiles.png");
-    let tiles_layout = TextureAtlasLayout::from_grid(Vec2::new(32.0, 32.0), 3, 1, None, None);
-    let tiles_texture_atlas_layout = texture_atlas_layouts.add(tiles_layout);
-
-    let width = level.tilemap[0].len();
-    let height = level.tilemap.len();
-    let offset_x = width as f32 / 2.0 * 64.0 - 32.0;
-    let offset_y = height as f32 / 2.0 * 64.0 - 32.0;
-
-    for (j, row) in level.tilemap.iter().enumerate() {
-        for (i, sprite_index) in row.iter().enumerate() {
-            commands.spawn((
-                Tile,
-                SpriteSheetBundle {
-                    texture: tiles_texture.clone(),
-                    atlas: TextureAtlas {
-                        layout: tiles_texture_atlas_layout.clone(),
-                        index: *sprite_index,
-                    },
-                    transform: Transform::from_xyz(
-                        i as f32 * 64.0 - offset_x,
-                        j as f32 * 64.0 - offset_y,
-                        -2.0,
-                    )
-                    .with_scale(Vec3::splat(2.0)),
-                    ..default()
-                },
-            ));
-        }
-    }
-
-    for i in -BORDER..width as i16 + BORDER {
-        for j in -BORDER..height as i16 + BORDER {
-            if !(i >= 0 && i < width as i16 && j >= 0 && j < height as i16) {
-                commands.spawn((
-                    Tile,
-                    SpriteSheetBundle {
-                        texture: tiles_texture.clone(),
-                        atlas: TextureAtlas {
-                            layout: tiles_texture_atlas_layout.clone(),
-                            index: 0,
-                        },
-                        transform: Transform::from_xyz(
-                            i as f32 * 64.0 - offset_x,
-                            j as f32 * 64.0 - offset_y,
-                            -2.0,
-                        )
-                        .with_scale(Vec3::splat(2.0)),
-                        ..default()
-                    },
-                ));
-            }
-        }
-    }
-
-    let units_texture = asset_server.load("sprites/units.png");
-    let units_layout = TextureAtlasLayout::from_grid(Vec2::new(32.0, 32.0), 8, 2, None, None);
-    let units_texture_atlas_layout = texture_atlas_layouts.add(units_layout);
-
-    for (id, (unit_type, position)) in level.units.iter().enumerate() {
-        let Position(col, row) = position;
-        commands.spawn((
-            Unit {
-                id,
-                ..UNITS[unit_type.index()].clone()
-            },
-            position.clone(),
-            SpriteSheetBundle {
-                texture: units_texture.clone(),
-                atlas: TextureAtlas {
-                    layout: units_texture_atlas_layout.clone(),
-                    index: unit_type.index(),
-                },
-                transform: Transform::from_xyz(
-                    *col as f32 * 64.0 - offset_x,
-                    *row as f32 * 64.0 - offset_y,
-                    -1.0,
-                )
-                .with_scale(Vec3::splat(2.0)),
-                ..default()
-            },
-        ));
-    }
-
-    let obstacles_texture = asset_server.load("sprites/obstacles.png");
-    let obstacles_layout = TextureAtlasLayout::from_grid(Vec2::new(32.0, 32.0), 2, 1, None, None);
-    let obstacles_texture_atlas_layout = texture_atlas_layouts.add(obstacles_layout);
-
-    for (obstacle, position) in &level.obstacles {
-        let Position(col, row) = position;
-        commands.spawn((
-            obstacle.clone(),
-            position.clone(),
-            SpriteSheetBundle {
-                texture: obstacles_texture.clone(),
-                atlas: TextureAtlas {
-                    layout: obstacles_texture_atlas_layout.clone(),
-                    index: obstacle.index(),
-                },
-                transform: Transform::from_xyz(
-                    *col as f32 * 64.0 - offset_x,
-                    *row as f32 * 64.0 - offset_y,
-                    -1.0,
-                )
-                .with_scale(Vec3::splat(2.0)),
-                ..default()
-            },
-        ));
-    }
-
-    let mut turn_order: Vec<_> = level.units.iter().enumerate().collect();
-    turn_order.sort_by(|(_, (unit_a, position_a)), (_, (unit_b, position_b))| {
-        unit_a
-            .order()
-            .cmp(&unit_b.order())
-            .then(position_a.0.cmp(&position_b.0))
-            .then(position_a.1.cmp(&position_b.1))
-    });
-    let turn_order: Vec<_> = turn_order.iter().map(|(id, _)| *id).collect();
-
-    (level.clone(), turn_order)
-}
-
 fn select_unit(
     mut commands: Commands,
-    asset_server: Res<AssetServer>,
-    mut texture_atlas_layouts: ResMut<Assets<TextureAtlasLayout>>,
     q_windows: Query<&Window, With<PrimaryWindow>>,
     mouse_button_input: Res<ButtonInput<MouseButton>>,
+    sprites: Res<Sprites>,
     level: Res<CurrentLevel>,
     mut selected: ResMut<Selected>,
     turn: Res<Turn>,
@@ -963,17 +990,6 @@ fn select_unit(
 
                     if unit.parasite {
                         if !unit.has_attacked {
-                            let selections_texture = asset_server.load("sprites/selections.png");
-                            let selections_layout = TextureAtlasLayout::from_grid(
-                                Vec2::new(32.0, 32.0),
-                                3,
-                                1,
-                                None,
-                                None,
-                            );
-                            let selections_texture_atlas_layout =
-                                texture_atlas_layouts.add(selections_layout);
-
                             let (mut unit, position) = units
                                 .iter_mut()
                                 .find(|(_, position)| {
@@ -1000,9 +1016,9 @@ fn select_unit(
                                             PossibleAttack(i, j),
                                             attack.clone(),
                                             SpriteSheetBundle {
-                                                texture: selections_texture.clone(),
+                                                texture: sprites.selections.0.clone(),
                                                 atlas: TextureAtlas {
-                                                    layout: selections_texture_atlas_layout.clone(),
+                                                    layout: sprites.selections.1.clone(),
                                                     index: 2,
                                                 },
                                                 transform: Transform::from_xyz(
@@ -1030,9 +1046,9 @@ fn select_unit(
                                         PossibleMovement,
                                         movement,
                                         SpriteSheetBundle {
-                                            texture: selections_texture.clone(),
+                                            texture: sprites.selections.0.clone(),
                                             atlas: TextureAtlas {
-                                                layout: selections_texture_atlas_layout.clone(),
+                                                layout: sprites.selections.1.clone(),
                                                 index: 1,
                                             },
                                             transform: Transform::from_xyz(
@@ -1055,18 +1071,6 @@ fn select_unit(
                         text.sections[0].value = format!("Cost: {}", unit.dna * 2);
 
                         if let Some(attack_directions) = &unit.attack_directions {
-                            let attack_directions_texture =
-                                asset_server.load("sprites/attack_directions.png");
-                            let attack_directions_layout = TextureAtlasLayout::from_grid(
-                                Vec2::new(32.0, 32.0),
-                                4,
-                                1,
-                                None,
-                                None,
-                            );
-                            let attack_directions_texture_atlas_layout =
-                                texture_atlas_layouts.add(attack_directions_layout);
-
                             for direction in attack_directions {
                                 let index = match direction {
                                     (1, 0) | (-1, 0) => 0,
@@ -1090,10 +1094,9 @@ fn select_unit(
                                         AttackDirection,
                                         position,
                                         SpriteSheetBundle {
-                                            texture: attack_directions_texture.clone(),
+                                            texture: sprites.attack_directions.0.clone(),
                                             atlas: TextureAtlas {
-                                                layout: attack_directions_texture_atlas_layout
-                                                    .clone(),
+                                                layout: sprites.attack_directions.1.clone(),
                                                 index,
                                             },
                                             transform: Transform::from_xyz(
@@ -1169,10 +1172,9 @@ fn infect_unit(
 
 fn movement(
     mut commands: Commands,
-    asset_server: Res<AssetServer>,
-    mut texture_atlas_layouts: ResMut<Assets<TextureAtlasLayout>>,
     q_windows: Query<&Window, With<PrimaryWindow>>,
     mouse_button_input: Res<ButtonInput<MouseButton>>,
+    sprites: Res<Sprites>,
     level: Res<CurrentLevel>,
     selected: Res<Selected>,
     mut camera_units_obstacles_spaces: ParamSet<(
@@ -1240,11 +1242,6 @@ fn movement(
                 let attacks =
                     possible_attacks(unit, &position, &level, &units_list, &obstacles_list);
 
-                let selections_texture = asset_server.load("sprites/selections.png");
-                let selections_layout =
-                    TextureAtlasLayout::from_grid(Vec2::new(32.0, 32.0), 3, 1, None, None);
-                let selections_texture_atlas_layout = texture_atlas_layouts.add(selections_layout);
-
                 if attacks.is_empty() {
                     let mut units = camera_units_obstacles_spaces.p1();
                     let (mut unit, _, _) =
@@ -1259,9 +1256,9 @@ fn movement(
                             PossibleAttack(i, j),
                             attack.clone(),
                             SpriteSheetBundle {
-                                texture: selections_texture.clone(),
+                                texture: sprites.selections.0.clone(),
                                 atlas: TextureAtlas {
-                                    layout: selections_texture_atlas_layout.clone(),
+                                    layout: sprites.selections.1.clone(),
                                     index: 2,
                                 },
                                 transform: Transform::from_xyz(
