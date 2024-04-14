@@ -349,6 +349,7 @@ pub enum StatText {
     Damage,
     Speed,
     Range,
+    Reward,
     MoveDirection,
     AttackDirection,
     Cost,
@@ -556,6 +557,22 @@ fn setup(
             ));
 
             parent.spawn((
+                StatText::Reward,
+                TextBundle::from_section(
+                    "",
+                    TextStyle {
+                        font_size: 12.0,
+                        color: Color::WHITE,
+                        ..TextStyle::default()
+                    },
+                )
+                .with_style(Style {
+                    top: Val::Px(152.0),
+                    ..default()
+                }),
+            ));
+
+            parent.spawn((
                 StatText::MoveDirection,
                 TextBundle::from_section(
                     "",
@@ -566,7 +583,7 @@ fn setup(
                     },
                 )
                 .with_style(Style {
-                    top: Val::Px(152.0),
+                    top: Val::Px(168.0),
                     ..default()
                 }),
             ));
@@ -582,7 +599,7 @@ fn setup(
                     },
                 )
                 .with_style(Style {
-                    top: Val::Px(168.0),
+                    top: Val::Px(184.0),
                     ..default()
                 }),
             ));
@@ -974,6 +991,12 @@ fn select_unit(
                         .find(|(stat_text, _)| **stat_text == StatText::Range)
                         .unwrap();
                     text.sections[0].value = format!("Range: {}", unit.range);
+
+                    let (_, mut text) = stat_texts
+                        .iter_mut()
+                        .find(|(stat_text, _)| **stat_text == StatText::Reward)
+                        .unwrap();
+                    text.sections[0].value = format!("Reward: {} DNA", unit.dna);
 
                     let (_, mut text) = stat_texts
                         .iter_mut()
