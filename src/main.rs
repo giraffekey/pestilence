@@ -18,7 +18,7 @@ pub const BORDER: i16 = 5;
 pub const UNITS: [Unit; 7] = [
     Unit {
         id: 0,
-        kind: UnitType::Soldier,
+        kind: UnitType::Assault,
         parasite: false,
         max_health: 3,
         health: 3,
@@ -207,7 +207,7 @@ pub struct Tile;
 
 #[derive(Debug, Clone)]
 pub enum UnitType {
-    Soldier,
+    Assault,
     Scout,
     Sniper,
     Ballistic,
@@ -219,7 +219,7 @@ pub enum UnitType {
 impl UnitType {
     pub fn index(&self) -> usize {
         match self {
-            Self::Soldier => 0,
+            Self::Assault => 0,
             Self::Scout => 1,
             Self::Sniper => 2,
             Self::Ballistic => 3,
@@ -234,7 +234,7 @@ impl UnitType {
             Self::Commander => 0,
             Self::Scout => 1,
             Self::Sniper => 2,
-            Self::Soldier => 3,
+            Self::Assault => 3,
             Self::Ballistic => 4,
             Self::Juggernaut => 5,
             Self::Heavy => 6,
@@ -243,13 +243,13 @@ impl UnitType {
 
     pub fn name(&self) -> &str {
         match self {
-            Self::Commander => "Commander",
+            Self::Assault => "Assault",
             Self::Scout => "Scout",
             Self::Sniper => "Sniper",
-            Self::Soldier => "Soldier",
             Self::Ballistic => "Ballistic",
             Self::Juggernaut => "Juggernaut",
             Self::Heavy => "Heavy",
+            Self::Commander => "Commander",
         }
     }
 }
@@ -1168,24 +1168,30 @@ fn movement(
     mouse_button_input: Res<ButtonInput<MouseButton>>,
     level: Res<CurrentLevel>,
     selected: Res<Selected>,
-    mut movements_attacks_units_obstacles: ParamSet<(
-        Query<(&PossibleMovement, &Position, Entity)>,
-        Query<(&PossibleAttack, &Position, Entity)>,
+    mut camera_units_obstacles_spaces: ParamSet<(
+        Query<&Transform, With<Camera>>,
         Query<(&mut Unit, &mut Position, &mut Transform)>,
         Query<(&Obstacle, &Position)>,
+        Query<(&PossibleMovement, &Position, Entity)>,
+        Query<(&PossibleAttack, &Position, Entity)>,
     )>,
 ) {
     if let Some(position) = q_windows.single().cursor_position() {
+        let camera = camera_units_obstacles_spaces.p0();
+        let camera_transform = camera.iter().next().unwrap();
+        let mouse_x = position.x + camera_transform.translation.x;
+        let mouse_y = position.y - camera_transform.translation.y;
+
         let CurrentLevel(level) = &*level;
         let width = level.tilemap[0].len();
         let height = level.tilemap.len();
         let offset_x = width as f32 / 2.0 * 64.0 - 32.0;
         let offset_y = height as f32 / 2.0 * 64.0 - 32.0;
-        let col = ((position.x - GAME_WIDTH / 2.0 + offset_x + 32.0) / 64.0).floor();
-        let row = ((GAME_HEIGHT / 2.0 - position.y + offset_y + 32.0) / 64.0).floor();
+        let col = ((mouse_x - GAME_WIDTH / 2.0 + offset_x + 32.0) / 64.0).floor();
+        let row = ((GAME_HEIGHT / 2.0 - mouse_y + offset_y + 32.0) / 64.0).floor();
         let movement = Position(col as usize, row as usize);
 
-        let movements = movements_attacks_units_obstacles.p0();
+        let movements = camera_units_obstacles_spaces.p3();
         if mouse_button_input.just_released(MouseButton::Left)
             && movements
                 .iter()
@@ -1198,14 +1204,14 @@ fn movement(
                         .remove::<(PossibleMovement, Position, SpriteSheetBundle)>();
                 }
 
-                let attacks = movements_attacks_units_obstacles.p1();
+                let attacks = camera_units_obstacles_spaces.p4();
                 for (_, _, entity) in attacks.iter() {
                     commands
                         .entity(entity)
                         .remove::<(PossibleAttack, Position, SpriteSheetBundle)>();
                 }
 
-                let mut units = movements_attacks_units_obstacles.p2();
+                let mut units = camera_units_obstacles_spaces.p1();
                 let (mut unit, mut position, mut transform) =
                     units.iter_mut().find(|(unit, _, _)| unit.id == id).unwrap();
                 *position = movement;
@@ -1213,13 +1219,13 @@ fn movement(
                 transform.translation.y = row as f32 * 64.0 - offset_y;
                 unit.has_moved = true;
 
-                let units_list: Vec<_> = movements_attacks_units_obstacles
-                    .p2()
+                let units_list: Vec<_> = camera_units_obstacles_spaces
+                    .p1()
                     .iter()
                     .map(|(unit, position, _)| (unit.clone(), position.clone()))
                     .collect();
-                let obstacles_list: Vec<_> = movements_attacks_units_obstacles
-                    .p3()
+                let obstacles_list: Vec<_> = camera_units_obstacles_spaces
+                    .p2()
                     .iter()
                     .map(|(obstacle, position)| (obstacle.clone(), position.clone()))
                     .collect();
@@ -1233,7 +1239,7 @@ fn movement(
                 let selections_texture_atlas_layout = texture_atlas_layouts.add(selections_layout);
 
                 if attacks.is_empty() {
-                    let mut units = movements_attacks_units_obstacles.p2();
+                    let mut units = camera_units_obstacles_spaces.p1();
                     let (mut unit, _, _) =
                         units.iter_mut().find(|(unit, _, _)| unit.id == id).unwrap();
                     unit.has_attacked = true;
@@ -1274,24 +1280,30 @@ fn attack(
     level: Res<CurrentLevel>,
     selected: Res<Selected>,
     mut dna: ResMut<Dna>,
-    mut attacks_units: ParamSet<(
-        Query<(&PossibleAttack, &Position, Entity)>,
+    mut camera_units_attacks: ParamSet<(
+        Query<&Transform, With<Camera>>,
         Query<(&mut Unit, &mut Position, &mut Transform, Entity)>,
+        Query<(&PossibleAttack, &Position, Entity)>,
     )>,
     attack_directions: Query<Entity, With<AttackDirection>>,
     mut stat_texts: Query<(&StatText, &mut Text)>,
 ) {
     if let Some(position) = q_windows.single().cursor_position() {
+        let camera = camera_units_attacks.p0();
+        let camera_transform = camera.iter().next().unwrap();
+        let mouse_x = position.x + camera_transform.translation.x;
+        let mouse_y = position.y - camera_transform.translation.y;
+
         let CurrentLevel(level) = &*level;
         let width = level.tilemap[0].len();
         let height = level.tilemap.len();
         let offset_x = width as f32 / 2.0 * 64.0 - 32.0;
         let offset_y = height as f32 / 2.0 * 64.0 - 32.0;
-        let col = ((position.x - GAME_WIDTH / 2.0 + offset_x + 32.0) / 64.0).floor();
-        let row = ((GAME_HEIGHT / 2.0 - position.y + offset_y + 32.0) / 64.0).floor();
+        let col = ((mouse_x - GAME_WIDTH / 2.0 + offset_x + 32.0) / 64.0).floor();
+        let row = ((GAME_HEIGHT / 2.0 - mouse_y + offset_y + 32.0) / 64.0).floor();
         let attack = Position(col as usize, row as usize);
 
-        let attacks = attacks_units.p0();
+        let attacks = camera_units_attacks.p2();
         if mouse_button_input.just_released(MouseButton::Left) {
             if let Some((attack, position, _)) =
                 attacks.iter().find(|(_, position, _)| **position == attack)
@@ -1299,7 +1311,7 @@ fn attack(
                 let attack = attack.clone();
                 let position = position.clone();
                 if let Selected(Some(id)) = *selected {
-                    let mut units = attacks_units.p1();
+                    let mut units = camera_units_attacks.p1();
                     let (mut unit, mut unit_position, mut transform, _) = units
                         .iter_mut()
                         .find(|(unit, _, _, _)| unit.id == id)
@@ -1327,7 +1339,7 @@ fn attack(
                         transform.translation.y = row as f32 * 64.0 - offset_y;
                     }
 
-                    let attacks = attacks_units.p0();
+                    let attacks = camera_units_attacks.p2();
                     let attack_positions = if attack_pattern.aoe {
                         let PossibleAttack(i, j) = attack;
                         attacks
@@ -1357,7 +1369,7 @@ fn attack(
                             .remove::<(AttackDirection, Position, SpriteSheetBundle)>();
                     }
 
-                    let mut units = attacks_units.p1();
+                    let mut units = camera_units_attacks.p1();
                     let targets: Vec<_> = units
                         .iter_mut()
                         .filter(|(_, position, _, _)| attack_positions.contains(position))
@@ -2029,13 +2041,6 @@ fn pathfind(
     {
         if position == *goal {
             break;
-        }
-
-        match unit.kind {
-            UnitType::Juggernaut => {
-                println!("{:?}", position);
-            }
-            _ => (),
         }
 
         let units: Vec<_> = units

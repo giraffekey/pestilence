@@ -22,7 +22,7 @@ pub fn levels() -> Vec<Level> {
                 vec![1, 2, 1, 1, 1, 1, 1, 1],
             ],
             units: vec![
-                (UnitType::Soldier, Position(0, 1)),
+                (UnitType::Assault, Position(0, 1)),
                 (UnitType::Scout, Position(2, 2)),
                 (UnitType::Sniper, Position(4, 3)),
                 (UnitType::Ballistic, Position(6, 0)),
