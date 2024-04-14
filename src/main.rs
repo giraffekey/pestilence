@@ -427,7 +427,7 @@ fn setup(
         TextureAtlasLayout::from_grid(Vec2::new(64.0, 208.0), 1, 1, None, None);
     let ui_background_texture_atlas_layout = texture_atlas_layouts.add(ui_background_layout);
 
-    commands.spawn((AtlasImageBundle {
+    commands.spawn(AtlasImageBundle {
         style: Style {
             width: Val::Px(128.0),
             height: Val::Px(416.0),
@@ -439,160 +439,167 @@ fn setup(
         texture_atlas: ui_background_texture_atlas_layout.into(),
         image: UiImage::new(ui_background_texture),
         ..default()
-    },));
+    });
 
-    commands.spawn((
-        StatText::Dna,
-        TextBundle::from_section(
-            format!("DNA: {}", level.initial_dna),
-            TextStyle {
-                font_size: 12.0,
-                color: Color::WHITE,
-                ..TextStyle::default()
+    commands
+        .spawn(NodeBundle {
+            style: Style {
+                width: Val::Px(128.0),
+                height: Val::Px(416.0),
+                position_type: PositionType::Absolute,
+                right: Val::Px(32.0),
+                top: Val::Px(32.0),
+                flex_direction: FlexDirection::Column,
+                align_items: AlignItems::Center,
+                ..default()
             },
-        )
-        .with_style(Style {
-            left: Val::Px(GAME_WIDTH - (32.0 + 96.0)),
-            top: Val::Px(32.0 + 24.0),
             ..default()
-        }),
-    ));
+        })
+        .with_children(|parent| {
+            parent.spawn((
+                StatText::Dna,
+                TextBundle::from_section(
+                    format!("DNA: {}", level.initial_dna),
+                    TextStyle {
+                        font_size: 12.0,
+                        color: Color::WHITE,
+                        ..TextStyle::default()
+                    },
+                )
+                .with_style(Style {
+                    top: Val::Px(24.0),
+                    ..default()
+                }),
+            ));
 
-    commands.spawn((
-        StatText::Name,
-        TextBundle::from_section(
-            "",
-            TextStyle {
-                font_size: 12.0,
-                color: Color::WHITE,
-                ..TextStyle::default()
-            },
-        )
-        .with_style(Style {
-            left: Val::Px(GAME_WIDTH - (32.0 + 96.0)),
-            top: Val::Px(32.0 + 64.0),
-            ..default()
-        }),
-    ));
+            parent.spawn((
+                StatText::Name,
+                TextBundle::from_section(
+                    "",
+                    TextStyle {
+                        font_size: 12.0,
+                        color: Color::WHITE,
+                        ..TextStyle::default()
+                    },
+                )
+                .with_style(Style {
+                    top: Val::Px(52.0),
+                    ..default()
+                }),
+            ));
 
-    commands.spawn((
-        StatText::Health,
-        TextBundle::from_section(
-            "",
-            TextStyle {
-                font_size: 12.0,
-                color: Color::WHITE,
-                ..TextStyle::default()
-            },
-        )
-        .with_style(Style {
-            left: Val::Px(GAME_WIDTH - (32.0 + 96.0)),
-            top: Val::Px(32.0 + 96.0),
-            ..default()
-        }),
-    ));
+            parent.spawn((
+                StatText::Health,
+                TextBundle::from_section(
+                    "",
+                    TextStyle {
+                        font_size: 12.0,
+                        color: Color::WHITE,
+                        ..TextStyle::default()
+                    },
+                )
+                .with_style(Style {
+                    top: Val::Px(88.0),
+                    ..default()
+                }),
+            ));
 
-    commands.spawn((
-        StatText::Damage,
-        TextBundle::from_section(
-            "",
-            TextStyle {
-                font_size: 12.0,
-                color: Color::WHITE,
-                ..TextStyle::default()
-            },
-        )
-        .with_style(Style {
-            left: Val::Px(GAME_WIDTH - (32.0 + 96.0)),
-            top: Val::Px(32.0 + 128.0),
-            ..default()
-        }),
-    ));
+            parent.spawn((
+                StatText::Damage,
+                TextBundle::from_section(
+                    "",
+                    TextStyle {
+                        font_size: 12.0,
+                        color: Color::WHITE,
+                        ..TextStyle::default()
+                    },
+                )
+                .with_style(Style {
+                    top: Val::Px(104.0),
+                    ..default()
+                }),
+            ));
 
-    commands.spawn((
-        StatText::Speed,
-        TextBundle::from_section(
-            "",
-            TextStyle {
-                font_size: 12.0,
-                color: Color::WHITE,
-                ..TextStyle::default()
-            },
-        )
-        .with_style(Style {
-            left: Val::Px(GAME_WIDTH - (32.0 + 96.0)),
-            top: Val::Px(32.0 + 160.0),
-            ..default()
-        }),
-    ));
+            parent.spawn((
+                StatText::Speed,
+                TextBundle::from_section(
+                    "",
+                    TextStyle {
+                        font_size: 12.0,
+                        color: Color::WHITE,
+                        ..TextStyle::default()
+                    },
+                )
+                .with_style(Style {
+                    top: Val::Px(120.0),
+                    ..default()
+                }),
+            ));
 
-    commands.spawn((
-        StatText::Range,
-        TextBundle::from_section(
-            "",
-            TextStyle {
-                font_size: 12.0,
-                color: Color::WHITE,
-                ..TextStyle::default()
-            },
-        )
-        .with_style(Style {
-            left: Val::Px(GAME_WIDTH - (32.0 + 96.0)),
-            top: Val::Px(32.0 + 192.0),
-            ..default()
-        }),
-    ));
+            parent.spawn((
+                StatText::Range,
+                TextBundle::from_section(
+                    "",
+                    TextStyle {
+                        font_size: 12.0,
+                        color: Color::WHITE,
+                        ..TextStyle::default()
+                    },
+                )
+                .with_style(Style {
+                    top: Val::Px(136.0),
+                    ..default()
+                }),
+            ));
 
-    commands.spawn((
-        StatText::MoveDirection,
-        TextBundle::from_section(
-            "",
-            TextStyle {
-                font_size: 10.0,
-                color: Color::WHITE,
-                ..TextStyle::default()
-            },
-        )
-        .with_style(Style {
-            left: Val::Px(GAME_WIDTH - (32.0 + 112.0)),
-            top: Val::Px(32.0 + 224.0),
-            ..default()
-        }),
-    ));
+            parent.spawn((
+                StatText::MoveDirection,
+                TextBundle::from_section(
+                    "",
+                    TextStyle {
+                        font_size: 10.0,
+                        color: Color::WHITE,
+                        ..TextStyle::default()
+                    },
+                )
+                .with_style(Style {
+                    top: Val::Px(152.0),
+                    ..default()
+                }),
+            ));
 
-    commands.spawn((
-        StatText::AttackDirection,
-        TextBundle::from_section(
-            "",
-            TextStyle {
-                font_size: 10.0,
-                color: Color::WHITE,
-                ..TextStyle::default()
-            },
-        )
-        .with_style(Style {
-            left: Val::Px(GAME_WIDTH - (32.0 + 112.0)),
-            top: Val::Px(32.0 + 256.0),
-            ..default()
-        }),
-    ));
+            parent.spawn((
+                StatText::AttackDirection,
+                TextBundle::from_section(
+                    "",
+                    TextStyle {
+                        font_size: 10.0,
+                        color: Color::WHITE,
+                        ..TextStyle::default()
+                    },
+                )
+                .with_style(Style {
+                    top: Val::Px(168.0),
+                    ..default()
+                }),
+            ));
 
-    commands.spawn((
-        StatText::Cost,
-        TextBundle::from_section(
-            "",
-            TextStyle {
-                font_size: 12.0,
-                color: Color::WHITE,
-                ..TextStyle::default()
-            },
-        )
-        .with_style(Style {
-            left: Val::Px(GAME_WIDTH - (32.0 + 96.0)),
-            top: Val::Px(GAME_HEIGHT - (32.0 + 96.0)),
-            ..default()
-        }),
-    ));
+            parent.spawn((
+                StatText::Cost,
+                TextBundle::from_section(
+                    "",
+                    TextStyle {
+                        font_size: 12.0,
+                        color: Color::WHITE,
+                        ..TextStyle::default()
+                    },
+                )
+                .with_style(Style {
+                    top: Val::Px(224.0),
+                    ..default()
+                }),
+            ));
+        });
 
     commands
         .spawn(NodeBundle {
