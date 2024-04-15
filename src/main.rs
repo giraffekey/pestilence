@@ -194,9 +194,12 @@ pub enum Animation {
     },
     UnitAttack {
         id: usize,
+        timer: Timer,
     },
     UnitDeath {
         id: usize,
+        timer: Timer,
+        entity: Entity,
     },
 }
 
@@ -770,12 +773,12 @@ fn setup_sprites(
                     last: i * 16 + 7,
                 },
                 AnimationTimer {
-                    timer: Timer::from_seconds(0.5, TimerMode::Once),
+                    timer: Timer::from_seconds(0.25, TimerMode::Once),
                     first: i * 16 + 8,
                     last: i * 16 + 9,
                 },
                 AnimationTimer {
-                    timer: Timer::from_seconds(0.15, TimerMode::Repeating),
+                    timer: Timer::from_seconds(0.15, TimerMode::Once),
                     first: i * 16 + 12,
                     last: i * 16 + 14,
                 },
@@ -1413,7 +1416,7 @@ fn attack(
     mut commands: Commands,
     q_windows: Query<&Window, With<PrimaryWindow>>,
     mouse_button_input: Res<ButtonInput<MouseButton>>,
-    animation_queue: Res<AnimationQueue>,
+    mut animation_queue: ResMut<AnimationQueue>,
     level: Res<CurrentLevel>,
     selected: Res<Selected>,
     mut dna: ResMut<Dna>,
@@ -1516,6 +1519,14 @@ fn attack(
                         .filter(|(_, position, _, _)| attack_positions.contains(position))
                         .collect();
 
+                    if animation_queue.queue.is_empty() {
+                        animation_queue.started = true;
+                    }
+                    animation_queue.queue.push(Animation::UnitAttack {
+                        id,
+                        timer: Timer::from_seconds(1.0, TimerMode::Once),
+                    });
+
                     for (mut target, _, _, entity) in targets {
                         target.health = target.health.checked_sub(damage).unwrap_or(0);
 
@@ -1528,9 +1539,14 @@ fn attack(
                                 .unwrap();
                             text.sections[0].value = format!("DNA: {}", dna.0);
 
-                            commands.entity(entity).remove::<Unit>();
-                            commands.entity(entity).remove::<Position>();
-                            commands.entity(entity).remove::<SpriteSheetBundle>();
+                            if animation_queue.queue.is_empty() {
+                                animation_queue.started = true;
+                            }
+                            animation_queue.queue.push(Animation::UnitDeath {
+                                id: target.id,
+                                timer: Timer::from_seconds(0.6, TimerMode::Once),
+                                entity,
+                            });
                         }
                     }
                 }
@@ -1672,13 +1688,15 @@ fn turn(
                             .find(|(unit, _, _, _)| unit.id == *id)
                             .unwrap();
 
+                        if animation_queue.queue.is_empty() {
+                            animation_queue.started = true;
+                        }
                         animation_queue.queue.push(Animation::UnitMove {
                             id: *id,
                             start: *position,
                             goal: attack_position,
                             progress: 0.0,
                         });
-                        animation_queue.started = true;
                         *position = attack_position.clone();
 
                         units_list = units_list
@@ -1811,6 +1829,14 @@ fn turn(
                     }
 
                     if let Some(attack_directions) = unit.attack_directions {
+                        if animation_queue.queue.is_empty() {
+                            animation_queue.started = true;
+                        }
+                        animation_queue.queue.push(Animation::UnitAttack {
+                            id: *id,
+                            timer: Timer::from_seconds(1.0, TimerMode::Once),
+                        });
+
                         for direction in attack_directions {
                             for dist in 1..=unit.range {
                                 let dcol = direction.0 * dist as isize;
@@ -1846,9 +1872,14 @@ fn turn(
                                         target.health.checked_sub(unit.damage).unwrap_or(0);
 
                                     if target.health == 0 {
-                                        commands.entity(entity).remove::<Unit>();
-                                        commands.entity(entity).remove::<Position>();
-                                        commands.entity(entity).remove::<SpriteSheetBundle>();
+                                        if animation_queue.queue.is_empty() {
+                                            animation_queue.started = true;
+                                        }
+                                        animation_queue.queue.push(Animation::UnitDeath {
+                                            id: target.id,
+                                            timer: Timer::from_seconds(0.6, TimerMode::Once),
+                                            entity,
+                                        });
                                     }
 
                                     let target_position = target_position.clone();
@@ -1863,14 +1894,14 @@ fn turn(
                                         let Position(col, row) = *position;
                                         let Position(target_col, target_row) = target_position;
                                         if col < target_col {
-                                            position.0 = col - 1;
-                                        } else if row > target_col {
-                                            position.0 = col + 1;
+                                            position.0 = target_col - 1;
+                                        } else if col > target_col {
+                                            position.0 = target_col + 1;
                                         }
                                         if row < target_row {
-                                            position.1 = row - 1;
+                                            position.1 = target_row - 1;
                                         } else if row > target_row {
-                                            position.1 = row + 1;
+                                            position.1 = target_row + 1;
                                         }
 
                                         let Position(col, row) = *position;
@@ -1961,6 +1992,7 @@ fn move_camera(
 }
 
 fn animate(
+    mut commands: Commands,
     time: Res<Time>,
     sprites: Res<Sprites>,
     mut animation_queue: ResMut<AnimationQueue>,
@@ -1991,15 +2023,15 @@ fn animate(
     if animation_queue.finished {
         match animation_queue.queue[0] {
             Animation::UnitMove { id, .. }
-            | Animation::UnitAttack { id }
-            | Animation::UnitDeath { id } => {
-                let (unit, _, mut timer, mut texture) = units
-                    .iter_mut()
-                    .find(|(unit, _, _, _)| unit.id == id)
-                    .unwrap();
-                let new_timer = sprites.units.2[unit.animation_index()].clone();
-                texture.index = new_timer.first;
-                *timer = new_timer;
+            | Animation::UnitAttack { id, .. }
+            | Animation::UnitDeath { id, .. } => {
+                if let Some((unit, _, mut timer, mut texture)) =
+                    units.iter_mut().find(|(unit, _, _, _)| unit.id == id)
+                {
+                    let new_timer = sprites.units.2[unit.animation_index()].clone();
+                    texture.index = new_timer.first;
+                    *timer = new_timer;
+                }
             }
         }
 
@@ -2014,17 +2046,17 @@ fn animate(
     if animation_queue.started {
         let (id, offset) = match animation_queue.queue[0] {
             Animation::UnitMove { id, .. } => (id, 1),
-            Animation::UnitAttack { id } => (id, 2),
-            Animation::UnitDeath { id } => (id, 3),
+            Animation::UnitAttack { id, .. } => (id, 2),
+            Animation::UnitDeath { id, .. } => (id, 3),
         };
 
-        let (unit, _, mut timer, mut texture) = units
-            .iter_mut()
-            .find(|(unit, _, _, _)| unit.id == id)
-            .unwrap();
-        let new_timer = sprites.units.2[unit.animation_index() + offset].clone();
-        texture.index = new_timer.first;
-        *timer = new_timer;
+        if let Some((unit, _, mut timer, mut texture)) =
+            units.iter_mut().find(|(unit, _, _, _)| unit.id == id)
+        {
+            let new_timer = sprites.units.2[unit.animation_index() + offset].clone();
+            texture.index = new_timer.first;
+            *timer = new_timer;
+        }
 
         animation_queue.started = false;
     }
@@ -2042,28 +2074,45 @@ fn animate(
                 goal,
                 progress,
             } => {
-                let (_, mut transform, _, _) = units
-                    .iter_mut()
-                    .find(|(unit, _, _, _)| unit.id == *id)
-                    .unwrap();
+                if let Some((_, mut transform, _, _)) =
+                    units.iter_mut().find(|(unit, _, _, _)| unit.id == *id)
+                {
+                    let Position(start_col, start_row) = start;
+                    let Position(goal_col, goal_row) = goal;
 
-                let Position(start_col, start_row) = start;
-                let Position(goal_col, goal_row) = goal;
+                    let col =
+                        *start_col as f32 + (*goal_col as f32 - *start_col as f32) * *progress;
+                    let row =
+                        *start_row as f32 + (*goal_row as f32 - *start_row as f32) * *progress;
 
-                let col = *start_col as f32 + (*goal_col as f32 - *start_col as f32) * *progress;
-                let row = *start_row as f32 + (*goal_row as f32 - *start_row as f32) * *progress;
+                    transform.translation.x = col * 64.0 - offset_x;
+                    transform.translation.y = row * 64.0 - offset_y;
 
-                transform.translation.x = col * 64.0 - offset_x;
-                transform.translation.y = row * 64.0 - offset_y;
-
-                if *progress >= 1.0 {
-                    animation_queue.finished = true;
+                    if *progress >= 1.0 {
+                        animation_queue.finished = true;
+                    } else {
+                        *progress +=
+                            1.0 / (distance(start, goal) as f32) * time.delta().as_secs_f32() * 2.0;
+                    }
                 } else {
-                    *progress +=
-                        1.0 / (distance(start, goal) as f32) * time.delta().as_secs_f32() * 2.0;
+                    animation_queue.finished = true;
                 }
             }
-            Animation::UnitAttack { .. } | Animation::UnitDeath { .. } => (),
+            Animation::UnitAttack { timer, .. } => {
+                timer.tick(time.delta());
+                if timer.just_finished() {
+                    animation_queue.finished = true;
+                }
+            }
+            Animation::UnitDeath { timer, entity, .. } => {
+                timer.tick(time.delta());
+                if timer.just_finished() {
+                    commands.entity(*entity).remove::<Unit>();
+                    commands.entity(*entity).remove::<Position>();
+                    commands.entity(*entity).remove::<SpriteSheetBundle>();
+                    animation_queue.finished = true;
+                }
+            }
         }
     }
 }
