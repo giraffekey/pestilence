@@ -11,8 +11,8 @@ mod levels;
 
 pub use levels::*;
 
-pub const GAME_WIDTH: f32 = 640.0;
-pub const GAME_HEIGHT: f32 = 480.0;
+pub const GAME_WIDTH: f32 = 1024.0;
+pub const GAME_HEIGHT: f32 = 576.0;
 pub const BORDER: i16 = 5;
 
 pub const UNITS: [Unit; 7] = [
@@ -20,9 +20,9 @@ pub const UNITS: [Unit; 7] = [
         id: 0,
         kind: UnitType::Assault,
         parasite: false,
-        max_health: 3,
-        health: 3,
-        damage: 2,
+        max_health: 5,
+        health: 5,
+        damage: 3,
         speed: 3,
         range: 4,
         move_direction: Direction::Cardinal,
@@ -41,9 +41,9 @@ pub const UNITS: [Unit; 7] = [
         id: 0,
         kind: UnitType::Scout,
         parasite: false,
-        max_health: 2,
-        health: 2,
-        damage: 1,
+        max_health: 3,
+        health: 3,
+        damage: 2,
         speed: 5,
         range: 3,
         move_direction: Direction::Diagonal,
@@ -62,9 +62,9 @@ pub const UNITS: [Unit; 7] = [
         id: 0,
         kind: UnitType::Sniper,
         parasite: false,
-        max_health: 3,
-        health: 3,
-        damage: 4,
+        max_health: 4,
+        health: 4,
+        damage: 6,
         speed: 4,
         range: 5,
         move_direction: Direction::Cardinal,
@@ -83,9 +83,9 @@ pub const UNITS: [Unit; 7] = [
         id: 0,
         kind: UnitType::Ballistic,
         parasite: false,
-        max_health: 3,
-        health: 3,
-        damage: 2,
+        max_health: 4,
+        health: 4,
+        damage: 4,
         speed: 3,
         range: 2,
         move_direction: Direction::Cardinal,
@@ -95,7 +95,7 @@ pub const UNITS: [Unit; 7] = [
             aoe: true,
             all_directions: true,
         },
-        dna: 3,
+        dna: 2,
         has_moved: false,
         has_attacked: false,
         attack_directions: None,
@@ -104,9 +104,9 @@ pub const UNITS: [Unit; 7] = [
         id: 0,
         kind: UnitType::Juggernaut,
         parasite: false,
-        max_health: 4,
-        health: 4,
-        damage: 3,
+        max_health: 8,
+        health: 8,
+        damage: 4,
         speed: 3,
         range: 4,
         move_direction: Direction::Cardinal,
@@ -125,9 +125,9 @@ pub const UNITS: [Unit; 7] = [
         id: 0,
         kind: UnitType::Heavy,
         parasite: false,
-        max_health: 5,
-        health: 5,
-        damage: 2,
+        max_health: 14,
+        health: 14,
+        damage: 4,
         speed: 2,
         range: 3,
         move_direction: Direction::Cardinal,
@@ -137,7 +137,7 @@ pub const UNITS: [Unit; 7] = [
             aoe: true,
             all_directions: false,
         },
-        dna: 4,
+        dna: 3,
         has_moved: false,
         has_attacked: false,
         attack_directions: None,
@@ -146,9 +146,9 @@ pub const UNITS: [Unit; 7] = [
         id: 0,
         kind: UnitType::Commander,
         parasite: false,
-        max_health: 4,
-        health: 4,
-        damage: 3,
+        max_health: 10,
+        health: 10,
+        damage: 5,
         speed: 3,
         range: 4,
         move_direction: Direction::Cardinal,
@@ -158,7 +158,7 @@ pub const UNITS: [Unit; 7] = [
             aoe: false,
             all_directions: false,
         },
-        dna: 5,
+        dna: 4,
         has_moved: false,
         has_attacked: false,
         attack_directions: None,
@@ -687,7 +687,7 @@ fn setup(
                 align_items: AlignItems::Center,
                 justify_content: JustifyContent::Center,
                 left: Val::Px(GAME_WIDTH / 2.0 - 96.0),
-                top: Val::Px(GAME_HEIGHT / 2.0 - 80.0),
+                top: Val::Px(GAME_HEIGHT / 2.0 - 176.0),
                 ..default()
             },
             ..default()
@@ -804,11 +804,8 @@ fn setup_sprites(
 
 fn setup_level(commands: &mut Commands, sprites: &Sprites, level_id: usize) -> (Level, Vec<usize>) {
     let level = &levels()[level_id];
-
-    let width = level.tilemap[0].len();
-    let height = level.tilemap.len();
-    let offset_x = width as f32 / 2.0 * 64.0 - 32.0;
-    let offset_y = height as f32 / 2.0 * 64.0 - 32.0;
+    let (width, height) = level.dimensions();
+    let (offset_x, offset_y) = level.offset();
 
     for (j, row) in level.tilemap.iter().enumerate() {
         for (i, sprite_index) in row.iter().enumerate() {
@@ -822,7 +819,7 @@ fn setup_level(commands: &mut Commands, sprites: &Sprites, level_id: usize) -> (
                     },
                     transform: Transform::from_xyz(
                         i as f32 * 64.0 - offset_x,
-                        j as f32 * 64.0 - offset_y,
+                        offset_y - j as f32 * 64.0,
                         -2.0,
                     )
                     .with_scale(Vec3::splat(2.0)),
@@ -845,7 +842,7 @@ fn setup_level(commands: &mut Commands, sprites: &Sprites, level_id: usize) -> (
                         },
                         transform: Transform::from_xyz(
                             i as f32 * 64.0 - offset_x,
-                            j as f32 * 64.0 - offset_y,
+                            offset_y - j as f32 * 64.0,
                             -2.0,
                         )
                         .with_scale(Vec3::splat(2.0)),
@@ -874,7 +871,7 @@ fn setup_level(commands: &mut Commands, sprites: &Sprites, level_id: usize) -> (
                 },
                 transform: Transform::from_xyz(
                     *col as f32 * 64.0 - offset_x,
-                    *row as f32 * 64.0 - offset_y,
+                    offset_y - *row as f32 * 64.0,
                     -1.0,
                 )
                 .with_scale(Vec3::splat(2.0)),
@@ -897,7 +894,7 @@ fn setup_level(commands: &mut Commands, sprites: &Sprites, level_id: usize) -> (
                 },
                 transform: Transform::from_xyz(
                     *col as f32 * 64.0 - offset_x,
-                    *row as f32 * 64.0 - offset_y,
+                    offset_y - *row as f32 * 64.0,
                     -1.0,
                 )
                 .with_scale(Vec3::splat(2.0)),
@@ -927,8 +924,8 @@ fn listen_change_level(
     mut turn_order: ResMut<TurnOrder>,
     mut dna: ResMut<Dna>,
     tiles: Query<Entity, With<Tile>>,
-    obstacles: Query<Entity, With<Unit>>,
     units: Query<Entity, With<Unit>>,
+    obstacles: Query<Entity, With<Obstacle>>,
     movements: Query<Entity, With<PossibleMovement>>,
     attacks: Query<Entity, With<PossibleAttack>>,
     attack_directions: Query<Entity, With<AttackDirection>>,
@@ -949,7 +946,7 @@ fn listen_change_level(
         for entity in units.iter() {
             commands
                 .entity(entity)
-                .remove::<(Unit, Position, SpriteSheetBundle)>();
+                .remove::<(Unit, Position, SpriteSheetBundle, AnimationTimer)>();
         }
 
         for entity in movements.iter() {
@@ -1008,18 +1005,16 @@ fn select_unit(
         let mouse_y = position.y - camera_transform.translation.y;
 
         let CurrentLevel(level) = &*level;
-        let width = level.tilemap[0].len();
-        let height = level.tilemap.len();
-        let offset_x = width as f32 / 2.0 * 64.0 - 32.0;
-        let offset_y = height as f32 / 2.0 * 64.0 - 32.0;
+        let (width, height) = level.dimensions();
+        let (offset_x, offset_y) = level.offset();
         let col = ((mouse_x - GAME_WIDTH / 2.0 + offset_x + 32.0) / 64.0).floor();
-        let row = ((GAME_HEIGHT / 2.0 - mouse_y + offset_y + 32.0) / 64.0).floor();
+        let row = ((mouse_y - GAME_HEIGHT / 2.0 + offset_y + 32.0) / 64.0).floor();
 
         let mut selection = camera_selection.p1();
         let mut selection_transform = selection.iter_mut().next().unwrap();
         if col >= 0.0 && col < width as f32 && row >= 0.0 && row < height as f32 {
             selection_transform.translation.x = col * 64.0 - offset_x;
-            selection_transform.translation.y = row * 64.0 - offset_y;
+            selection_transform.translation.y = offset_y - row * 64.0;
 
             if mouse_button_input.just_released(MouseButton::Left) && *turn == Turn::Parasites {
                 for entity in movements.iter() {
@@ -1139,7 +1134,7 @@ fn select_unit(
                                                 },
                                                 transform: Transform::from_xyz(
                                                     *col as f32 * 64.0 - offset_x,
-                                                    *row as f32 * 64.0 - offset_y,
+                                                    offset_y - *row as f32 * 64.0,
                                                     -0.5,
                                                 )
                                                 .with_scale(Vec3::splat(2.0)),
@@ -1169,7 +1164,7 @@ fn select_unit(
                                             },
                                             transform: Transform::from_xyz(
                                                 col as f32 * 64.0 - offset_x,
-                                                row as f32 * 64.0 - offset_y,
+                                                offset_y - row as f32 * 64.0,
                                                 -0.5,
                                             )
                                             .with_scale(Vec3::splat(2.0)),
@@ -1191,8 +1186,8 @@ fn select_unit(
                                 let index = match direction {
                                     (1, 0) | (-1, 0) => 0,
                                     (0, 1) | (0, -1) => 1,
-                                    (1, -1) | (-1, 1) => 2,
-                                    (1, 1) | (-1, -1) => 3,
+                                    (1, 1) | (-1, -1) => 2,
+                                    (1, -1) | (-1, 1) => 3,
                                     _ => unreachable!(),
                                 };
 
@@ -1217,7 +1212,7 @@ fn select_unit(
                                             },
                                             transform: Transform::from_xyz(
                                                 col as f32 * 64.0 - offset_x,
-                                                row as f32 * 64.0 - offset_y,
+                                                offset_y - row as f32 * 64.0,
                                                 -0.5,
                                             )
                                             .with_scale(Vec3::splat(2.0)),
@@ -1259,8 +1254,8 @@ fn infect_unit(
         if mouse_button_input.just_released(MouseButton::Left)
             && position.x >= GAME_WIDTH - 96.0 - 32.0
             && position.x <= GAME_WIDTH - 96.0 + 32.0
-            && position.y >= GAME_HEIGHT - 80.0 - 16.0
-            && position.y <= GAME_HEIGHT - 80.0 + 16.0
+            && position.y >= GAME_HEIGHT - 176.0 - 16.0
+            && position.y <= GAME_HEIGHT - 176.0 + 16.0
         {
             if let Selected(Some(id)) = *selected {
                 let (mut unit, mut timer, mut unit_texture) =
@@ -1321,12 +1316,10 @@ fn movement(
         let mouse_y = position.y - camera_transform.translation.y;
 
         let CurrentLevel(level) = &*level;
-        let width = level.tilemap[0].len();
-        let height = level.tilemap.len();
-        let offset_x = width as f32 / 2.0 * 64.0 - 32.0;
-        let offset_y = height as f32 / 2.0 * 64.0 - 32.0;
+        let (width, height) = level.dimensions();
+        let (offset_x, offset_y) = level.offset();
         let col = ((mouse_x - GAME_WIDTH / 2.0 + offset_x + 32.0) / 64.0).floor();
-        let row = ((GAME_HEIGHT / 2.0 - mouse_y + offset_y + 32.0) / 64.0).floor();
+        let row = ((mouse_y - GAME_HEIGHT / 2.0 + offset_y + 32.0) / 64.0).floor();
         let movement = Position(col as usize, row as usize);
 
         let movements = units_obstacles_spaces.p2();
@@ -1398,7 +1391,7 @@ fn movement(
                                 },
                                 transform: Transform::from_xyz(
                                     *col as f32 * 64.0 - offset_x,
-                                    *row as f32 * 64.0 - offset_y,
+                                    offset_y - *row as f32 * 64.0,
                                     -0.5,
                                 )
                                 .with_scale(Vec3::splat(2.0)),
@@ -1439,12 +1432,10 @@ fn attack(
         let mouse_y = position.y - camera_transform.translation.y;
 
         let CurrentLevel(level) = &*level;
-        let width = level.tilemap[0].len();
-        let height = level.tilemap.len();
-        let offset_x = width as f32 / 2.0 * 64.0 - 32.0;
-        let offset_y = height as f32 / 2.0 * 64.0 - 32.0;
+        let (width, height) = level.dimensions();
+        let (offset_x, offset_y) = level.offset();
         let col = ((mouse_x - GAME_WIDTH / 2.0 + offset_x + 32.0) / 64.0).floor();
-        let row = ((GAME_HEIGHT / 2.0 - mouse_y + offset_y + 32.0) / 64.0).floor();
+        let row = ((mouse_y - GAME_HEIGHT / 2.0 + offset_y + 32.0) / 64.0).floor();
         let attack = Position(col as usize, row as usize);
 
         let attacks = camera_units_attacks.p2();
@@ -1480,7 +1471,7 @@ fn attack(
 
                         let Position(col, row) = *unit_position;
                         transform.translation.x = col as f32 * 64.0 - offset_x;
-                        transform.translation.y = row as f32 * 64.0 - offset_y;
+                        transform.translation.y = offset_y - row as f32 * 64.0;
                     }
 
                     let attacks = camera_units_attacks.p2();
@@ -1811,10 +1802,8 @@ fn turn(
         Turn::HumansAttack => {
             let CurrentLevel(level) = &*level;
             let TurnOrder(turn_order) = &*turn_order;
-            let width = level.tilemap[0].len();
-            let height = level.tilemap.len();
-            let offset_x = width as f32 / 2.0 * 64.0 - 32.0;
-            let offset_y = height as f32 / 2.0 * 64.0 - 32.0;
+            let (width, height) = level.dimensions();
+            let (offset_x, offset_y) = level.offset();
 
             for id in turn_order {
                 if let Some((unit, position, _, _)) = units_obstacles
@@ -1906,7 +1895,7 @@ fn turn(
 
                                         let Position(col, row) = *position;
                                         transform.translation.x = col as f32 * 64.0 - offset_x;
-                                        transform.translation.y = row as f32 * 64.0 - offset_y;
+                                        transform.translation.y = offset_y - row as f32 * 64.0;
                                     }
 
                                     if !unit.attack_pattern.aoe {
@@ -1961,10 +1950,8 @@ fn move_camera(
     if mouse_button_input.pressed(MouseButton::Right) {
         let mut camera_transform = camera.iter_mut().next().unwrap();
         let CurrentLevel(level) = &*level;
-        let width = level.tilemap[0].len();
-        let height = level.tilemap.len();
-        let offset_x = width as f32 / 2.0 * 64.0 - 32.0;
-        let offset_y = height as f32 / 2.0 * 64.0 - 32.0;
+        let (width, height) = level.dimensions();
+        let (offset_x, offset_y) = level.offset();
 
         for motion in mouse_motion.read() {
             let min_camera_x = -(BORDER as f32) * 64.0 - offset_x + GAME_WIDTH / 2.0;
@@ -2063,10 +2050,7 @@ fn animate(
 
     if !animation_queue.queue.is_empty() {
         let CurrentLevel(level) = &*level;
-        let width = level.tilemap[0].len();
-        let height = level.tilemap.len();
-        let offset_x = width as f32 / 2.0 * 64.0 - 32.0;
-        let offset_y = height as f32 / 2.0 * 64.0 - 32.0;
+        let (offset_x, offset_y) = level.offset();
         match &mut animation_queue.queue[0] {
             Animation::UnitMove {
                 id,
@@ -2086,7 +2070,7 @@ fn animate(
                         *start_row as f32 + (*goal_row as f32 - *start_row as f32) * *progress;
 
                     transform.translation.x = col * 64.0 - offset_x;
-                    transform.translation.y = row * 64.0 - offset_y;
+                    transform.translation.y = offset_y - row * 64.0;
 
                     if *progress >= 1.0 {
                         animation_queue.finished = true;
