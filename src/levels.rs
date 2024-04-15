@@ -36,6 +36,6 @@ pub fn levels() -> Vec<Level> {
             (Obstacle::Wall, Position(6, 4)),
             (Obstacle::Boulder, Position(4, 1)),
         ],
-        initial_dna: 10,
+        initial_dna: 5,
     }]
 }

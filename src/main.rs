@@ -32,7 +32,7 @@ pub const UNITS: [Unit; 7] = [
             aoe: false,
             all_directions: false,
         },
-        dna: 4,
+        dna: 2,
         has_moved: false,
         has_attacked: false,
         attack_directions: None,
@@ -53,7 +53,7 @@ pub const UNITS: [Unit; 7] = [
             aoe: false,
             all_directions: false,
         },
-        dna: 2,
+        dna: 1,
         has_moved: false,
         has_attacked: false,
         attack_directions: None,
@@ -74,7 +74,7 @@ pub const UNITS: [Unit; 7] = [
             aoe: false,
             all_directions: false,
         },
-        dna: 4,
+        dna: 2,
         has_moved: false,
         has_attacked: false,
         attack_directions: None,
@@ -95,7 +95,7 @@ pub const UNITS: [Unit; 7] = [
             aoe: true,
             all_directions: true,
         },
-        dna: 6,
+        dna: 3,
         has_moved: false,
         has_attacked: false,
         attack_directions: None,
@@ -116,7 +116,7 @@ pub const UNITS: [Unit; 7] = [
             aoe: false,
             all_directions: false,
         },
-        dna: 6,
+        dna: 3,
         has_moved: false,
         has_attacked: false,
         attack_directions: None,
@@ -137,7 +137,7 @@ pub const UNITS: [Unit; 7] = [
             aoe: true,
             all_directions: false,
         },
-        dna: 8,
+        dna: 4,
         has_moved: false,
         has_attacked: false,
         attack_directions: None,
@@ -158,7 +158,7 @@ pub const UNITS: [Unit; 7] = [
             aoe: false,
             all_directions: false,
         },
-        dna: 10,
+        dna: 5,
         has_moved: false,
         has_attacked: false,
         attack_directions: None,
@@ -177,7 +177,34 @@ pub struct Sprites {
     selections: (Handle<Image>, Handle<TextureAtlasLayout>),
     tiles: (Handle<Image>, Handle<TextureAtlasLayout>),
     ui_background: (Handle<Image>, Handle<TextureAtlasLayout>),
-    units: (Handle<Image>, Handle<TextureAtlasLayout>),
+    units: (
+        Handle<Image>,
+        Handle<TextureAtlasLayout>,
+        Vec<AnimationTimer>,
+    ),
+}
+
+#[derive(Debug, Clone)]
+pub enum Animation {
+    UnitMove {
+        id: usize,
+        start: Position,
+        goal: Position,
+        progress: f32,
+    },
+    UnitAttack {
+        id: usize,
+    },
+    UnitDeath {
+        id: usize,
+    },
+}
+
+#[derive(Debug, Clone, Resource)]
+pub struct AnimationQueue {
+    queue: Vec<Animation>,
+    started: bool,
+    finished: bool,
 }
 
 #[derive(Debug, Clone, Resource)]
@@ -211,6 +238,13 @@ pub struct Dna(u16);
 
 #[derive(Debug, Clone, Resource)]
 pub struct Cost(Option<u16>);
+
+#[derive(Debug, Clone, Component)]
+pub struct AnimationTimer {
+    timer: Timer,
+    first: usize,
+    last: usize,
+}
 
 #[derive(Debug, Clone, Component)]
 pub struct Tile;
@@ -323,6 +357,21 @@ pub struct Unit {
     attack_directions: Option<Vec<(isize, isize)>>,
 }
 
+impl Unit {
+    pub fn animation_index(&self) -> usize {
+        let offset = if self.parasite { 4 } else { 0 };
+        match self.kind {
+            UnitType::Assault => offset,
+            UnitType::Scout => 8 + offset,
+            UnitType::Sniper => 16 + offset,
+            UnitType::Ballistic => 24 + offset,
+            UnitType::Juggernaut => 32 + offset,
+            UnitType::Heavy => 40 + offset,
+            UnitType::Commander => 48 + offset,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Component)]
 pub enum Obstacle {
     Wall,
@@ -396,6 +445,7 @@ fn main() {
                 turn,
                 move_camera,
                 (win, listen_change_level).chain(),
+                animate,
             ),
         )
         .run();
@@ -406,6 +456,11 @@ fn setup(
     asset_server: Res<AssetServer>,
     mut texture_atlas_layouts: ResMut<Assets<TextureAtlasLayout>>,
 ) {
+    commands.insert_resource(AnimationQueue {
+        queue: Vec::new(),
+        started: false,
+        finished: false,
+    });
     commands.insert_resource(Selected(None));
     commands.insert_resource(Turn::HumansMove);
 
@@ -698,8 +753,35 @@ fn setup_sprites(
     let ui_background_texture_atlas_layout = texture_atlas_layouts.add(ui_background_layout);
 
     let units_texture = asset_server.load("sprites/units.png");
-    let units_layout = TextureAtlasLayout::from_grid(Vec2::new(32.0, 32.0), 8, 2, None, None);
+    let units_layout = TextureAtlasLayout::from_grid(Vec2::new(32.0, 32.0), 4, 56, None, None);
     let units_texture_atlas_layout = texture_atlas_layouts.add(units_layout);
+
+    let units_animations = (0..14)
+        .flat_map(|i| {
+            [
+                AnimationTimer {
+                    timer: Timer::from_seconds(0.3, TimerMode::Repeating),
+                    first: i * 16,
+                    last: i * 16 + 3,
+                },
+                AnimationTimer {
+                    timer: Timer::from_seconds(0.15, TimerMode::Repeating),
+                    first: i * 16 + 4,
+                    last: i * 16 + 7,
+                },
+                AnimationTimer {
+                    timer: Timer::from_seconds(0.5, TimerMode::Once),
+                    first: i * 16 + 8,
+                    last: i * 16 + 9,
+                },
+                AnimationTimer {
+                    timer: Timer::from_seconds(0.15, TimerMode::Repeating),
+                    first: i * 16 + 12,
+                    last: i * 16 + 14,
+                },
+            ]
+        })
+        .collect();
 
     let sprites = Sprites {
         attack_directions: (
@@ -710,7 +792,7 @@ fn setup_sprites(
         selections: (selections_texture, selections_texture_atlas_layout),
         tiles: (tiles_texture, tiles_texture_atlas_layout),
         ui_background: (ui_background_texture, ui_background_texture_atlas_layout),
-        units: (units_texture, units_texture_atlas_layout),
+        units: (units_texture, units_texture_atlas_layout, units_animations),
     };
 
     commands.insert_resource(sprites.clone());
@@ -773,17 +855,19 @@ fn setup_level(commands: &mut Commands, sprites: &Sprites, level_id: usize) -> (
 
     for (id, (unit_type, position)) in level.units.iter().enumerate() {
         let Position(col, row) = position;
+        let unit = Unit {
+            id,
+            ..UNITS[unit_type.index()].clone()
+        };
+        let timer = sprites.units.2[unit.animation_index()].clone();
         commands.spawn((
-            Unit {
-                id,
-                ..UNITS[unit_type.index()].clone()
-            },
+            unit.clone(),
             position.clone(),
             SpriteSheetBundle {
                 texture: sprites.units.0.clone(),
                 atlas: TextureAtlas {
                     layout: sprites.units.1.clone(),
-                    index: unit_type.index(),
+                    index: timer.first,
                 },
                 transform: Transform::from_xyz(
                     *col as f32 * 64.0 - offset_x,
@@ -793,6 +877,7 @@ fn setup_level(commands: &mut Commands, sprites: &Sprites, level_id: usize) -> (
                 .with_scale(Vec3::splat(2.0)),
                 ..default()
             },
+            timer,
         ));
     }
 
@@ -833,6 +918,7 @@ fn setup_level(commands: &mut Commands, sprites: &Sprites, level_id: usize) -> (
 
 fn listen_change_level(
     mut commands: Commands,
+    mut events: EventReader<ChangeLevel>,
     sprites: Res<Sprites>,
     mut current_level: ResMut<CurrentLevel>,
     mut turn_order: ResMut<TurnOrder>,
@@ -843,7 +929,6 @@ fn listen_change_level(
     movements: Query<Entity, With<PossibleMovement>>,
     attacks: Query<Entity, With<PossibleAttack>>,
     attack_directions: Query<Entity, With<AttackDirection>>,
-    mut events: EventReader<ChangeLevel>,
 ) {
     for event in events.read() {
         for entity in tiles.iter() {
@@ -894,6 +979,7 @@ fn select_unit(
     q_windows: Query<&Window, With<PrimaryWindow>>,
     mouse_button_input: Res<ButtonInput<MouseButton>>,
     sprites: Res<Sprites>,
+    animation_queue: Res<AnimationQueue>,
     level: Res<CurrentLevel>,
     mut selected: ResMut<Selected>,
     turn: Res<Turn>,
@@ -908,6 +994,10 @@ fn select_unit(
     attacks: Query<Entity, With<PossibleAttack>>,
     attack_directions: Query<Entity, With<AttackDirection>>,
 ) {
+    if !animation_queue.queue.is_empty() {
+        return;
+    }
+
     if let Some(position) = q_windows.single().cursor_position() {
         let camera = camera_selection.p0();
         let camera_transform = camera.iter().next().unwrap();
@@ -1150,11 +1240,17 @@ fn select_unit(
 fn infect_unit(
     q_windows: Query<&Window, With<PrimaryWindow>>,
     mouse_button_input: Res<ButtonInput<MouseButton>>,
+    sprites: Res<Sprites>,
+    animation_queue: Res<AnimationQueue>,
     mut selected: ResMut<Selected>,
     mut dna: ResMut<Dna>,
-    mut units: Query<(&mut Unit, &mut TextureAtlas)>,
+    mut units: Query<(&mut Unit, &mut AnimationTimer, &mut TextureAtlas)>,
     mut stat_texts: Query<(&StatText, &mut Text)>,
 ) {
+    if !animation_queue.queue.is_empty() {
+        return;
+    }
+
     if let Some(position) = q_windows.single().cursor_position() {
         // If clicked infect button
         if mouse_button_input.just_released(MouseButton::Left)
@@ -1164,13 +1260,16 @@ fn infect_unit(
             && position.y <= GAME_HEIGHT - 80.0 + 16.0
         {
             if let Selected(Some(id)) = *selected {
-                let (mut unit, mut unit_texture) =
-                    units.iter_mut().find(|(unit, _)| unit.id == id).unwrap();
+                let (mut unit, mut timer, mut unit_texture) =
+                    units.iter_mut().find(|(unit, _, _)| unit.id == id).unwrap();
 
                 let cost = unit.dna * 2;
                 if dna.0 >= cost {
                     unit.parasite = true;
-                    unit_texture.index += 8;
+
+                    let new_timer = sprites.units.2[unit.animation_index()].clone();
+                    unit_texture.index = new_timer.first;
+                    *timer = new_timer;
 
                     dna.0 -= cost;
 
@@ -1198,18 +1297,22 @@ fn movement(
     q_windows: Query<&Window, With<PrimaryWindow>>,
     mouse_button_input: Res<ButtonInput<MouseButton>>,
     sprites: Res<Sprites>,
+    mut animation_queue: ResMut<AnimationQueue>,
     level: Res<CurrentLevel>,
     selected: Res<Selected>,
-    mut camera_units_obstacles_spaces: ParamSet<(
-        Query<&Transform, With<Camera>>,
-        Query<(&mut Unit, &mut Position, &mut Transform)>,
+    camera: Query<&Transform, With<Camera>>,
+    mut units_obstacles_spaces: ParamSet<(
+        Query<(&mut Unit, &mut Position)>,
         Query<(&Obstacle, &Position)>,
         Query<(&PossibleMovement, &Position, Entity)>,
         Query<(&PossibleAttack, &Position, Entity)>,
     )>,
 ) {
+    if !animation_queue.queue.is_empty() {
+        return;
+    }
+
     if let Some(position) = q_windows.single().cursor_position() {
-        let camera = camera_units_obstacles_spaces.p0();
         let camera_transform = camera.iter().next().unwrap();
         let mouse_x = position.x + camera_transform.translation.x;
         let mouse_y = position.y - camera_transform.translation.y;
@@ -1223,7 +1326,7 @@ fn movement(
         let row = ((GAME_HEIGHT / 2.0 - mouse_y + offset_y + 32.0) / 64.0).floor();
         let movement = Position(col as usize, row as usize);
 
-        let movements = camera_units_obstacles_spaces.p3();
+        let movements = units_obstacles_spaces.p2();
         if mouse_button_input.just_released(MouseButton::Left)
             && movements
                 .iter()
@@ -1236,28 +1339,35 @@ fn movement(
                         .remove::<(PossibleMovement, Position, SpriteSheetBundle)>();
                 }
 
-                let attacks = camera_units_obstacles_spaces.p4();
+                let attacks = units_obstacles_spaces.p3();
                 for (_, _, entity) in attacks.iter() {
                     commands
                         .entity(entity)
                         .remove::<(PossibleAttack, Position, SpriteSheetBundle)>();
                 }
 
-                let mut units = camera_units_obstacles_spaces.p1();
-                let (mut unit, mut position, mut transform) =
-                    units.iter_mut().find(|(unit, _, _)| unit.id == id).unwrap();
+                let mut units = units_obstacles_spaces.p0();
+                let (mut unit, mut position) =
+                    units.iter_mut().find(|(unit, _)| unit.id == id).unwrap();
+
+                animation_queue.queue.push(Animation::UnitMove {
+                    id,
+                    start: *position,
+                    goal: movement,
+                    progress: 0.0,
+                });
+                animation_queue.started = true;
+
                 *position = movement;
-                transform.translation.x = col as f32 * 64.0 - offset_x;
-                transform.translation.y = row as f32 * 64.0 - offset_y;
                 unit.has_moved = true;
 
-                let units_list: Vec<_> = camera_units_obstacles_spaces
-                    .p1()
+                let units_list: Vec<_> = units_obstacles_spaces
+                    .p0()
                     .iter()
-                    .map(|(unit, position, _)| (unit.clone(), position.clone()))
+                    .map(|(unit, position)| (unit.clone(), position.clone()))
                     .collect();
-                let obstacles_list: Vec<_> = camera_units_obstacles_spaces
-                    .p2()
+                let obstacles_list: Vec<_> = units_obstacles_spaces
+                    .p1()
                     .iter()
                     .map(|(obstacle, position)| (obstacle.clone(), position.clone()))
                     .collect();
@@ -1266,9 +1376,8 @@ fn movement(
                     possible_attacks(unit, &position, &level, &units_list, &obstacles_list);
 
                 if attacks.is_empty() {
-                    let mut units = camera_units_obstacles_spaces.p1();
-                    let (mut unit, _, _) =
-                        units.iter_mut().find(|(unit, _, _)| unit.id == id).unwrap();
+                    let mut units = units_obstacles_spaces.p0();
+                    let (mut unit, _) = units.iter_mut().find(|(unit, _)| unit.id == id).unwrap();
                     unit.has_attacked = true;
                 }
 
@@ -1304,6 +1413,7 @@ fn attack(
     mut commands: Commands,
     q_windows: Query<&Window, With<PrimaryWindow>>,
     mouse_button_input: Res<ButtonInput<MouseButton>>,
+    animation_queue: Res<AnimationQueue>,
     level: Res<CurrentLevel>,
     selected: Res<Selected>,
     mut dna: ResMut<Dna>,
@@ -1315,6 +1425,10 @@ fn attack(
     attack_directions: Query<Entity, With<AttackDirection>>,
     mut stat_texts: Query<(&StatText, &mut Text)>,
 ) {
+    if !animation_queue.queue.is_empty() {
+        return;
+    }
+
     if let Some(position) = q_windows.single().cursor_position() {
         let camera = camera_units_attacks.p0();
         let camera_transform = camera.iter().next().unwrap();
@@ -1428,6 +1542,7 @@ fn attack(
 fn turn(
     mut commands: Commands,
     keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut animation_queue: ResMut<AnimationQueue>,
     level: Res<CurrentLevel>,
     mut turn: ResMut<Turn>,
     turn_order: Res<TurnOrder>,
@@ -1440,6 +1555,10 @@ fn turn(
     attacks: Query<Entity, With<PossibleAttack>>,
     attack_directions: Query<Entity, With<AttackDirection>>,
 ) {
+    if !animation_queue.queue.is_empty() {
+        return;
+    }
+
     match *turn {
         Turn::Parasites => {
             let mut units = units_obstacles.p0();
@@ -1487,10 +1606,6 @@ fn turn(
 
             let CurrentLevel(level) = &*level;
             let TurnOrder(turn_order) = &*turn_order;
-            let width = level.tilemap[0].len();
-            let height = level.tilemap.len();
-            let offset_x = width as f32 / 2.0 * 64.0 - 32.0;
-            let offset_y = height as f32 / 2.0 * 64.0 - 32.0;
 
             let mut units_list: Vec<_> = units_obstacles
                 .p0()
@@ -1552,14 +1667,19 @@ fn turn(
                     }
 
                     if let Some(attack_position) = nearest_attack_position {
-                        let (_, mut position, mut transform, _) = units
+                        let (_, mut position, _, _) = units
                             .iter_mut()
                             .find(|(unit, _, _, _)| unit.id == *id)
                             .unwrap();
-                        let Position(col, row) = attack_position;
+
+                        animation_queue.queue.push(Animation::UnitMove {
+                            id: *id,
+                            start: *position,
+                            goal: attack_position,
+                            progress: 0.0,
+                        });
+                        animation_queue.started = true;
                         *position = attack_position.clone();
-                        transform.translation.x = col as f32 * 64.0 - offset_x;
-                        transform.translation.y = row as f32 * 64.0 - offset_y;
 
                         units_list = units_list
                             .iter()
@@ -1773,11 +1893,16 @@ fn turn(
 }
 
 fn win(
+    mut events: EventWriter<ChangeLevel>,
+    animation_queue: Res<AnimationQueue>,
     level: Res<CurrentLevel>,
     dna: Res<Dna>,
     units: Query<&Unit>,
-    mut events: EventWriter<ChangeLevel>,
 ) {
+    if !animation_queue.queue.is_empty() {
+        return;
+    }
+
     // Parasites win
     if units.iter().all(|unit| unit.parasite) {
         let CurrentLevel(level) = &*level;
@@ -1831,6 +1956,114 @@ fn move_camera(
             } else if camera_transform.translation.y > max_camera_y {
                 camera_transform.translation.y = max_camera_y;
             }
+        }
+    }
+}
+
+fn animate(
+    time: Res<Time>,
+    sprites: Res<Sprites>,
+    mut animation_queue: ResMut<AnimationQueue>,
+    level: Res<CurrentLevel>,
+    mut animations_units: ParamSet<(
+        Query<(&mut AnimationTimer, &mut TextureAtlas)>,
+        Query<(
+            &Unit,
+            &mut Transform,
+            &mut AnimationTimer,
+            &mut TextureAtlas,
+        )>,
+    )>,
+) {
+    for (mut timer, mut texture) in &mut animations_units.p0() {
+        timer.timer.tick(time.delta());
+        if timer.timer.just_finished() {
+            texture.index = if texture.index == timer.last {
+                timer.first
+            } else {
+                texture.index + 1
+            };
+        }
+    }
+
+    let mut units = animations_units.p1();
+
+    if animation_queue.finished {
+        match animation_queue.queue[0] {
+            Animation::UnitMove { id, .. }
+            | Animation::UnitAttack { id }
+            | Animation::UnitDeath { id } => {
+                let (unit, _, mut timer, mut texture) = units
+                    .iter_mut()
+                    .find(|(unit, _, _, _)| unit.id == id)
+                    .unwrap();
+                let new_timer = sprites.units.2[unit.animation_index()].clone();
+                texture.index = new_timer.first;
+                *timer = new_timer;
+            }
+        }
+
+        animation_queue.queue = animation_queue.queue[1..].to_vec();
+        animation_queue.finished = false;
+
+        if !animation_queue.queue.is_empty() {
+            animation_queue.started = true;
+        }
+    }
+
+    if animation_queue.started {
+        let (id, offset) = match animation_queue.queue[0] {
+            Animation::UnitMove { id, .. } => (id, 1),
+            Animation::UnitAttack { id } => (id, 2),
+            Animation::UnitDeath { id } => (id, 3),
+        };
+
+        let (unit, _, mut timer, mut texture) = units
+            .iter_mut()
+            .find(|(unit, _, _, _)| unit.id == id)
+            .unwrap();
+        let new_timer = sprites.units.2[unit.animation_index() + offset].clone();
+        texture.index = new_timer.first;
+        *timer = new_timer;
+
+        animation_queue.started = false;
+    }
+
+    if !animation_queue.queue.is_empty() {
+        let CurrentLevel(level) = &*level;
+        let width = level.tilemap[0].len();
+        let height = level.tilemap.len();
+        let offset_x = width as f32 / 2.0 * 64.0 - 32.0;
+        let offset_y = height as f32 / 2.0 * 64.0 - 32.0;
+        match &mut animation_queue.queue[0] {
+            Animation::UnitMove {
+                id,
+                start,
+                goal,
+                progress,
+            } => {
+                let (_, mut transform, _, _) = units
+                    .iter_mut()
+                    .find(|(unit, _, _, _)| unit.id == *id)
+                    .unwrap();
+
+                let Position(start_col, start_row) = start;
+                let Position(goal_col, goal_row) = goal;
+
+                let col = *start_col as f32 + (*goal_col as f32 - *start_col as f32) * *progress;
+                let row = *start_row as f32 + (*goal_row as f32 - *start_row as f32) * *progress;
+
+                transform.translation.x = col * 64.0 - offset_x;
+                transform.translation.y = row * 64.0 - offset_y;
+
+                if *progress >= 1.0 {
+                    animation_queue.finished = true;
+                } else {
+                    *progress +=
+                        1.0 / (distance(start, goal) as f32) * time.delta().as_secs_f32() * 2.0;
+                }
+            }
+            Animation::UnitAttack { .. } | Animation::UnitDeath { .. } => (),
         }
     }
 }
